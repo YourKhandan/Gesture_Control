@@ -1,4 +1,4 @@
-# ------- PPT Gesture Control (Streamlit / WebRTC version) -------
+#  PPT Gesture Control (Streamlit / WebRTC version)
 # Evolved from the original desktop script:
 #   - Same finger-counting core: OpenCV contour + convexity-defect method
 #     (no MediaPipe), same ROI + threshold + morphology pipeline.
@@ -21,12 +21,12 @@ import cv2
 import numpy as np
 from streamlit_webrtc import VideoProcessorBase
 
-# === Settings (same values as the original script) ===
+# === Settings 
 COOLDOWN_SECONDS = 1.0
 ROI = (100, 100, 400, 400)  # x1, y1, x2, y2 — same box the user shows their hand in
 
 
-# ---------- Finger counting (unchanged core logic from the original script) ----------
+# Finger counting (unchanged core logic from the original script) 
 def count_fingers(thresh: np.ndarray) -> int:
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -129,7 +129,7 @@ class GestureProcessor(VideoProcessorBase):
                 elif action is None:
                     self.status_text = "Show a clear gesture..."
 
-        # Draw the same overlays the desktop version showed, but onto the
+        # Draws the same overlays the desktop version showed, but onto the
         # frame that gets streamed back to the visitor's browser.
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(img, self.status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
