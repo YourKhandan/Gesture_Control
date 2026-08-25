@@ -5,10 +5,6 @@ Ties together:
   - upload_converter.py  (pptx/pdf -> slide images)
   - gesture_control.py   (browser webcam -> gesture actions, via streamlit-webrtc)
 
-Run locally:   streamlit run app.py
-Deploy:        push this folder to GitHub, then deploy on
-                https://share.streamlit.io (Streamlit Community Cloud).
-                Make sure requirements.txt AND packages.txt are both present.
 """
 
 import time
@@ -41,7 +37,7 @@ st.markdown(
 st.title("🖐️ HandDeck — Gesture Slide Control")
 st.caption("Upload a PPTX or PDF, allow camera access, and page through it with hand gestures.")
 
-# ---------- Session state ----------
+#  Session state 
 if "slides" not in st.session_state:
     st.session_state.slides = []       # list of image paths
 if "current" not in st.session_state:
@@ -49,7 +45,7 @@ if "current" not in st.session_state:
 if "last_gesture_action_ts" not in st.session_state:
     st.session_state.last_gesture_action_ts = 0.0
 
-# ---------- 1. Upload & convert ----------
+#  1. Upload & convert
 st.subheader("1. Upload your deck")
 
 if not libreoffice_available():
@@ -77,14 +73,12 @@ if uploaded_file is not None and st.session_state.get("_last_upload_name") != up
     except ConversionError as e:
         progress_box.error(str(e))
 
-# ---------- 2. Slide viewer ----------
-# Reserve this section's position now, but fill it in AFTER the gesture
-# section below has had a chance to update st.session_state.current.
-# Otherwise the image drawn here would be one refresh cycle stale.
+#2. Slide viewer
+
 st.subheader("2. Deck")
 deck_container = st.container()
 
-# ---------- 3. Gesture control ----------
+# 3. Gesture control 
 st.subheader("3. Gesture control")
 st.markdown(
     "✊ **Fist** → previous slide &nbsp;&nbsp;|&nbsp;&nbsp; "
@@ -139,7 +133,7 @@ else:
         unsafe_allow_html=True,
     )
 
-# ---------- Now render the deck (section 2), using up-to-date state ----------
+
 with deck_container:
     if st.session_state.slides:
         col_prev, col_view, col_next = st.columns([1, 6, 1])
