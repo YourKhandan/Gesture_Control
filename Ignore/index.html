@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HandDeck — Gesture Slide Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0d0b;
+    --panel: #10151233;
+    --panel-solid: #10151a;
+    --line: #22302a;
+    --accent: #39ff7a;
+    --accent-dim: #1f7a45;
+    --amber: #ffb454;
+    --danger: #ff5c5c;
+    --text: #e8f0ea;
+    --muted: #7e8e85;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(57,255,122,0.06), transparent 60%),
+      radial-gradient(900px 500px at 100% 10%, rgba(255,180,84,0.04), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+  }
+  a{color:var(--accent);}
+
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px clamp(16px,4vw,48px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 10px var(--accent);
+  }
+  .brand h1{
+    font-family:var(--mono); font-size:16px; letter-spacing:0.08em;
+    margin:0; font-weight:700; text-transform:uppercase;
+  }
+  .brand span{color:var(--muted); font-family:var(--mono); font-size:11px;}
+  header nav a{
+    font-family:var(--mono); font-size:11px; color:var(--muted);
+    text-decoration:none; letter-spacing:0.05em;
+  }
+
+  main{
+    display:grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap:28px;
+    padding: clamp(16px,4vw,48px);
+    max-width:1400px;
+    margin:0 auto;
+  }
+  @media (max-width: 980px){
+    main{grid-template-columns:1fr;}
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    backdrop-filter: blur(6px);
+  }
+
+  /* ---- Camera / HUD viewport ---- */
+  .viewport-wrap{ position:relative; }
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; color:var(--accent);
+    letter-spacing:0.15em; text-transform:uppercase; margin-bottom:10px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow::before{content:'//'; color:var(--accent-dim);}
+
+  .hud{
+    position:relative;
+    aspect-ratio: 4/3;
+    background:#050706;
+    border:1px solid var(--line);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .hud video, .hud canvas{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover;
+  }
+  .hud video{ transform:scaleX(-1); }
+  .hud canvas{ transform:scaleX(-1); }
+
+  /* corner brackets — signature element */
+  .bracket{
+    position:absolute; width:26px; height:26px;
+    border-color: var(--accent);
+    opacity:0.85; pointer-events:none;
+  }
+  .bracket.tl{top:10px; left:10px; border-top:2px solid var(--accent); border-left:2px solid var(--accent);}
+  .bracket.tr{top:10px; right:10px; border-top:2px solid var(--accent); border-right:2px solid var(--accent);}
+  .bracket.bl{bottom:10px; left:10px; border-bottom:2px solid var(--accent); border-left:2px solid var(--accent);}
+  .bracket.br{bottom:10px; right:10px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent);}
+
+  .scanline{
+    position:absolute; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity:0; pointer-events:none;
+  }
+  .scanline.active{
+    opacity:0.7;
+    animation: scan 2.4s linear infinite;
+  }
+  @keyframes scan{
+    0%{ top:6%; }
+    50%{ top:94%; }
+    100%{ top:6%; }
+  }
+
+  .hud-placeholder{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px;
+    color:var(--muted); font-family:var(--mono); font-size:12px; text-align:center; padding:20px;
+  }
+  .hud-placeholder .big{color:var(--text); font-size:14px;}
+
+  .readout{
+    position:absolute; top:10px; left:50%; transform:translateX(-50%);
+    font-family:var(--mono); font-size:11px; color:var(--accent);
+    background:rgba(5,7,6,0.6); border:1px solid var(--line);
+    padding:4px 10px; border-radius:2px; letter-spacing:0.08em;
+  }
+
+  .gauge-wrap{
+    position:absolute; bottom:12px; right:12px;
+    display:flex; align-items:center; gap:8px;
+    background:rgba(5,7,6,0.65); border:1px solid var(--line);
+    padding:6px 10px; border-radius:2px;
+  }
+  .gauge{ width:34px; height:34px; }
+  .gauge-count{ font-family:var(--mono); font-size:20px; font-weight:700; color:var(--accent); }
+  .gauge-label{ font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:0.1em;}
+
+  /* ---- Controls row ---- */
+  .controls{
+    display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;
+  }
+  button{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.05em;
+    text-transform:uppercase; padding:11px 18px; border-radius:3px;
+    border:1px solid var(--line); background:transparent; color:var(--text);
+    cursor:pointer; transition: all 0.15s ease;
+  }
+  button:hover{ border-color:var(--accent); color:var(--accent); }
+  button:disabled{ opacity:0.35; cursor:not-allowed; }
+  button.primary{ background:var(--accent); border-color:var(--accent); color:#04140a; font-weight:700; }
+  button.primary:hover{ background:#5dffa0; color:#04140a; }
+  button.stop{ border-color:var(--danger); color:var(--danger); }
+  button.stop:hover{ background:var(--danger); color:#1a0505; }
+
+  .status-line{
+    margin-top:12px; font-family:var(--mono); font-size:12px; color:var(--muted);
+    display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  .status-line b{ color:var(--text); font-weight:400; }
+  .status-line .ok{ color:var(--accent); }
+  .status-line .err{ color:var(--danger); }
+
+  /* ---- Legend ---- */
+  .legend{
+    margin-top:18px; padding-top:16px; border-top:1px solid var(--line);
+    display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;
+  }
+  .legend-item{
+    text-align:center; padding:10px 6px; border:1px solid var(--line); border-radius:3px;
+  }
+  .legend-item .sym{ font-size:20px; margin-bottom:4px; }
+  .legend-item .name{ font-family:var(--mono); font-size:10px; color:var(--accent); letter-spacing:0.05em; }
+  .legend-item .act{ font-family:var(--mono); font-size:9px; color:var(--muted); margin-top:2px; }
+
+  /* ---- Right column: deck ---- */
+  .side{ display:flex; flex-direction:column; gap:20px; }
+  .deck-panel{ padding:20px; }
+  .deck-header{
+    display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px;
+  }
+  .deck-header h2{ font-family:var(--mono); font-size:13px; letter-spacing:0.1em; margin:0; text-transform:uppercase;}
+  .deck-count{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+  .stage{
+    position:relative; aspect-ratio:16/10; background:#0d1210;
+    border:1px solid var(--line); border-radius:3px; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .stage img{ width:100%; height:100%; object-fit:contain; }
+  .stage .demo-slide{
+    width:100%; height:100%; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:24px;
+  }
+  .stage .demo-slide .num{ font-family:var(--mono); color:var(--accent-dim); font-size:12px; margin-bottom:10px; }
+  .stage .demo-slide h3{ font-family:var(--sans); font-size:clamp(18px,3vw,28px); margin:0 0 8px; }
+  .stage .demo-slide p{ color:var(--muted); font-size:13px; max-width:32ch; margin:0; }
+
+  .stage-nav{
+    position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    font-family:var(--mono); font-size:11px; color:var(--muted);
+    background:rgba(5,7,6,0.6); padding:4px 10px; border-radius:20px; border:1px solid var(--line);
+  }
+
+  .deck-controls{ display:flex; gap:8px; margin-top:14px; }
+  .deck-controls button{ flex:1; }
+
+  .upload-row{
+    margin-top:14px; padding-top:14px; border-top:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .upload-row label{
+    font-family:var(--mono); font-size:11px; color:var(--muted); cursor:pointer;
+    border:1px dashed var(--line); padding:8px 12px; border-radius:3px; flex:1; text-align:center;
+  }
+  .upload-row label:hover{ border-color:var(--accent); color:var(--accent); }
+  .upload-row input[type=file]{ display:none; }
+
+  .about-panel{ padding:20px; }
+  .about-panel h2{ font-family:var(--mono); font-size:13px; letter-spacing:0.1em; margin:0 0 10px; text-transform:uppercase; }
+  .about-panel p{ font-size:13px; line-height:1.6; color:var(--muted); margin:0 0 10px; }
+  .about-panel code{
+    font-family:var(--mono); background:#0d1210; border:1px solid var(--line);
+    padding:1px 6px; border-radius:2px; color:var(--accent); font-size:12px;
+  }
+
+  footer{
+    text-align:center; padding:30px; font-family:var(--mono); font-size:10px; color:var(--muted);
+    border-top:1px solid var(--line); letter-spacing:0.05em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="dot"></div>
+    <div>
+      <h1>HandDeck</h1>
+    </div>
+    <span>/ gesture slide control</span>
+  </div>
+  <nav><a href="#about-section">how it works ↓</a></nav>
+</header>
+
+<main>
+  <!-- LEFT: Camera / HUD -->
+  <section class="panel" style="padding:20px;">
+    <div class="viewport-wrap">
+      <div class="eyebrow">live tracking</div>
+      <div class="hud" id="hud">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="scanline" id="scanline"></div>
+        <div class="bracket tl"></div><div class="bracket tr"></div>
+        <div class="bracket bl"></div><div class="bracket br"></div>
+        <div class="readout" id="readout" style="display:none;">TRACKING</div>
+
+        <div class="hud-placeholder" id="placeholder">
+          <div class="big">Camera is off</div>
+          <div>Press Start and allow camera access to begin.<br>Nothing is uploaded — all tracking runs in your browser.</div>
+        </div>
+
+        <div class="gauge-wrap" id="gaugeWrap" style="display:none;">
+          <svg class="gauge" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15.5" fill="none" stroke="#22302a" stroke-width="3"/>
+            <circle id="gaugeArc" cx="18" cy="18" r="15.5" fill="none" stroke="#39ff7a" stroke-width="3"
+              stroke-dasharray="97.4" stroke-dashoffset="97.4" stroke-linecap="round" transform="rotate(-90 18 18)"/>
+          </svg>
+          <div>
+            <div class="gauge-count" id="gaugeCount">0</div>
+            <div class="gauge-label">FINGERS</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="primary" id="btnStart">▶ Start Camera</button>
+        <button class="stop" id="btnStop" disabled>⏹ Stop</button>
+      </div>
+
+      <div class="status-line">
+        <div>STATUS: <b id="statusText">Idle</b></div>
+        <div>LAST ACTION: <b id="actionText">—</b></div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="sym">✊</div><div class="name">FIST</div><div class="act">Previous slide</div></div>
+        <div class="legend-item"><div class="sym">☝</div><div class="name">ONE</div><div class="act">Fullscreen present</div></div>
+        <div class="legend-item"><div class="sym">✋</div><div class="name">PALM</div><div class="act">Next slide</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: Deck + About -->
+  <section class="side">
+    <div class="panel deck-panel">
+      <div class="deck-header">
+        <h2>Slide Deck</h2>
+        <div class="deck-count"><span id="slideIdx">1</span> / <span id="slideTotal">4</span></div>
+      </div>
+      <div class="stage" id="stage">
+        <!-- demo/uploaded slides render here -->
+      </div>
+      <div class="deck-controls">
+        <button id="prevBtn">← Prev</button>
+        <button id="fsBtn">⛶ Present</button>
+        <button id="nextBtn">Next →</button>
+      </div>
+      <div class="upload-row">
+        <label for="fileInput" id="uploadLabel">⤒ Upload a PDF or slide images (replaces demo deck)</label>
+        <input type="file" id="fileInput" accept="application/pdf,image/*" multiple>
+      </div>
+    </div>
+
+    <div class="panel about-panel" id="about-section">
+      <h2>How this works</h2>
+      <p>Your webcam frames are processed entirely client-side using MediaPipe Hands — nothing is sent to a server. A fist (0 fingers) moves back a slide, an open palm (5 fingers) moves forward, and a single raised finger toggles fullscreen present mode. There's a 1 second cooldown between actions, same as the desktop version.</p>
+      <p>Browsers can't send keystrokes to native apps like PowerPoint, so gestures here drive the built-in deck on this page. Upload slide images exported from PowerPoint (<code>File → Export → PNG</code>) to use your real deck.</p>
+      <p>To control the actual PowerPoint desktop app from a link like this, you'd need a small local bridge app on your PC listening for commands — a separate, optional piece.</p>
+    </div>
+  </section>
+</main>
+
+<footer>HANDDECK — RUNS FULLY IN-BROWSER — REQUIRES HTTPS FOR CAMERA ACCESS</footer>
+
+<!-- MediaPipe Hands (loaded from CDN, runs in the visitor's browser) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+(function(){
+  // ---------- Elements ----------
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+  const statusText = document.getElementById('statusText');
+  const actionText = document.getElementById('actionText');
+  const placeholder = document.getElementById('placeholder');
+  const readout = document.getElementById('readout');
+  const scanline = document.getElementById('scanline');
+  const gaugeWrap = document.getElementById('gaugeWrap');
+  const gaugeArc = document.getElementById('gaugeArc');
+  const gaugeCount = document.getElementById('gaugeCount');
+
+  const stage = document.getElementById('stage');
+  const slideIdx = document.getElementById('slideIdx');
+  const slideTotal = document.getElementById('slideTotal');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const fsBtn = document.getElementById('fsBtn');
+  const fileInput = document.getElementById('fileInput');
+
+  // ---------- Deck state ----------
+  const demoDeck = [
+    {title:'HandDeck', sub:'Gesture-controlled presentations, no touching required.'},
+    {title:'Show a fist', sub:'Moves to the previous slide.'},
+    {title:'Show an open palm', sub:'Moves to the next slide.'},
+    {title:'Raise one finger', sub:'Enters fullscreen present mode.'}
+  ];
+  let deck = demoDeck;
+  let usingImages = false;
+  let current = 0;
+
+  function renderSlide(){
+    stage.innerHTML = '';
+    if(usingImages){
+      const img = document.createElement('img');
+      img.src = deck[current];
+      stage.appendChild(img);
+    } else {
+      const s = deck[current];
+      const div = document.createElement('div');
+      div.className = 'demo-slide';
+      div.innerHTML = `<div class="num">SLIDE ${current+1}</div><h3>${s.title}</h3><p>${s.sub}</p>`;
+      stage.appendChild(div);
+    }
+    slideIdx.textContent = current+1;
+    slideTotal.textContent = deck.length;
+  }
+  function nextSlide(){ current = Math.min(current+1, deck.length-1); renderSlide(); }
+  function prevSlide(){ current = Math.max(current-1, 0); renderSlide(); }
+
+  prevBtn.addEventListener('click', prevSlide);
+  nextBtn.addEventListener('click', nextSlide);
+  fsBtn.addEventListener('click', () => {
+    if(stage.requestFullscreen) stage.requestFullscreen();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'ArrowRight') nextSlide();
+    if(e.key === 'ArrowLeft') prevSlide();
+  });
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    if(!files.length) return;
+    deck = files.map(f => URL.createObjectURL(f));
+    usingImages = true;
+    current = 0;
+    renderSlide();
+  });
+
+  renderSlide();
+
+  // ---------- Camera / MediaPipe state ----------
+  let running = false;
+  let hands = null;
+  let rafId = null;
+  let lastActionTime = 0;
+  const COOLDOWN_MS = 1000;
+
+  function setStatus(text, cls){
+    statusText.textContent = text;
+    statusText.className = cls || '';
+  }
+
+  function fingerCount(landmarks){
+    // Generic distance-from-wrist heuristic: a finger is "extended" if its
+    // tip sits farther from the wrist than its base knuckle does.
+    const wrist = landmarks[0];
+    const tips = [4, 8, 12, 16, 20];
+    const bases = [2, 5, 9, 13, 17];
+    const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+    let count = 0;
+    for(let i=0;i<5;i++){
+      const tipD = dist(landmarks[tips[i]], wrist);
+      const baseD = dist(landmarks[bases[i]], wrist);
+      const margin = i === 0 ? 1.05 : 1.1; // thumb needs a smaller margin
+      if(tipD > baseD * margin) count++;
+    }
+    return count;
+  }
+
+  function drawSkeleton(landmarks){
+    const w = overlay.width, h = overlay.height;
+    ctx.clearRect(0,0,w,h);
+    const connections = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],
+      [0,17]
+    ];
+    ctx.strokeStyle = 'rgba(57,255,122,0.8)';
+    ctx.lineWidth = 2;
+    connections.forEach(([a,b])=>{
+      ctx.beginPath();
+      ctx.moveTo(landmarks[a].x*w, landmarks[a].y*h);
+      ctx.lineTo(landmarks[b].x*w, landmarks[b].y*h);
+      ctx.stroke();
+    });
+    ctx.fillStyle = '#39ff7a';
+    landmarks.forEach(p=>{
+      ctx.beginPath();
+      ctx.arc(p.x*w, p.y*h, 3, 0, Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  function updateGauge(count){
+    gaugeCount.textContent = count;
+    const circumference = 97.4;
+    const frac = Math.min(count,5)/5;
+    gaugeArc.setAttribute('stroke-dashoffset', String(circumference * (1-frac)));
+  }
+
+  function performAction(count){
+    const now = performance.now();
+    if(now - lastActionTime < COOLDOWN_MS) return;
+
+    if(count === 0){
+      prevSlide();
+      actionText.textContent = '✊ Fist → Previous slide';
+      lastActionTime = now;
+    } else if(count === 5){
+      nextSlide();
+      actionText.textContent = '✋ Open palm → Next slide';
+      lastActionTime = now;
+    } else if(count === 1){
+      if(stage.requestFullscreen) stage.requestFullscreen();
+      actionText.textContent = '☝ One finger → Fullscreen present';
+      lastActionTime = now;
+    } else {
+      actionText.textContent = 'Show a clear gesture…';
+    }
+  }
+
+  function onResults(results){
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+
+    if(results.multiHandLandmarks && results.multiHandLandmarks.length > 0){
+      const lm = results.multiHandLandmarks[0];
+      drawSkeleton(lm);
+      const count = fingerCount(lm);
+      updateGauge(count);
+      setStatus('Hand detected', 'ok');
+      performAction(count);
+    } else {
+      ctx.clearRect(0,0,overlay.width, overlay.height);
+      updateGauge(0);
+      setStatus('No hand detected…', '');
+    }
+  }
+
+  async function startCamera(){
+    btnStart.disabled = true;
+    setStatus('Requesting camera permission…');
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
+      video.srcObject = stream;
+      await video.play();
+    } catch(err){
+      setStatus('Camera permission denied or unavailable', 'err');
+      btnStart.disabled = false;
+      return;
+    }
+
+    placeholder.style.display = 'none';
+    readout.style.display = 'block';
+    gaugeWrap.style.display = 'flex';
+    scanline.classList.add('active');
+    btnStop.disabled = false;
+
+    hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.6
+    });
+    hands.onResults(onResults);
+
+    running = true;
+    setStatus('Tracking…', 'ok');
+
+    async function loop(){
+      if(!running) return;
+      if(video.readyState >= 2){
+        await hands.send({ image: video });
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  function stopCamera(){
+    running = false;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(video.srcObject){
+      video.srcObject.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+    ctx.clearRect(0,0,overlay.width, overlay.height);
+    placeholder.style.display = 'flex';
+    readout.style.display = 'none';
+    gaugeWrap.style.display = 'none';
+    scanline.classList.remove('active');
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    setStatus('Stopped');
+    actionText.textContent = '—';
+  }
+
+  btnStart.addEventListener('click', startCamera);
+  btnStop.addEventListener('click', stopCamera);
+})();
+</script>
+
+</body>
+</html>
